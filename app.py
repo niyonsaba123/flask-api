@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 import os
+from models import db, HouseWorker, Employer
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # Initialize app
 app = Flask(__name__)
@@ -46,10 +48,11 @@ def register_worker():
     new_worker = HouseWorker(
         name=data['name'],
         email=data['email'],
-        password=data['password'],
-        salary=data.get('salary', 0),
-        rating=0
+        phone=data.get('phone', ''),
+        address=data.get('address', ''),
+        expected_salary=data.get('expected_salary', '')
     )
+    new_worker.set_password(data['password'])
     db.session.add(new_worker)
     db.session.commit()
     return jsonify({"message": "House worker registered successfully."}), 201
@@ -94,6 +97,7 @@ def login_worker():
     if worker and worker.check_password(data['password']):
         return jsonify({"message": "Login successful"}), 200
     return jsonify({"error": "Invalid credentials"}), 401
+
 
 # Run the app
 if __name__ == '__main__':
