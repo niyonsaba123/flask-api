@@ -13,6 +13,12 @@ class HouseWorker(db.Model):
     address = db.Column(db.String(200))
     expected_salary = db.Column(db.String(50))
 
+    def set_password(self, password):
+        self.password = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password, password)
+
 # Employer table
 class Employer(db.Model):
     __tablename__ = 'employers'
