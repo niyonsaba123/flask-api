@@ -79,6 +79,22 @@ def get_workers():
         "rating": w.rating
     } for w in workers])
 
+@app.errorhandler(400)
+def bad_request(error):
+    return jsonify({"error": "Bad request"}), 400
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({"error": "Resource not found"}), 404
+
+@app.route('/login_worker', methods=['POST'])
+def login_worker():
+    data = request.get_json()
+    worker = HouseWorker.query.filter_by(email=data['email']).first()
+    if worker and worker.check_password(data['password']):
+        return jsonify({"message": "Login successful"}), 200
+    return jsonify({"error": "Invalid credentials"}), 401
+
 # Run the app
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))  # Use Render-assigned port or fallback to 5000
