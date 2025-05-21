@@ -90,6 +90,52 @@ def get_workers():
         "expected_salary": w.expected_salary
     } for w in workers]), 200
 
+# Update a house worker (worker only)
+@app.route('/workers/<int:worker_id>', methods=['PUT'])
+@jwt_required()
+def update_worker(worker_id):
+    claims = get_jwt()
+    role = claims.get('role')
+    user_id = int(get_jwt_identity())
+
+    if role != 'worker' or user_id != worker_id:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    data = request.get_json()
+    worker = HouseWorker.query.get(worker_id)
+    if not worker:
+        return jsonify({"error": "Worker not found"}), 404
+
+    worker.name = data.get('name', worker.name)
+    worker.email = data.get('email', worker.email)
+    if 'password' in data:
+        worker.password = generate_password_hash(data['password'])
+    worker.phone = data.get('phone', worker.phone)
+    worker.address = data.get('address', worker.address)
+    worker.expected_salary = data.get('expected_salary', worker.expected_salary)
+
+    db.session.commit()
+    return jsonify({"message": "Worker updated successfully."}), 200
+
+# Delete a house worker (worker only)
+@app.route('/workers/<int:worker_id>', methods=['DELETE'])
+@jwt_required()
+def delete_worker(worker_id):
+    claims = get_jwt()
+    role = claims.get('role')
+    user_id = int(get_jwt_identity())
+
+    if role != 'worker' or user_id != worker_id:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    worker = HouseWorker.query.get(worker_id)
+    if not worker:
+        return jsonify({"error": "Worker not found"}), 404
+
+    db.session.delete(worker)
+    db.session.commit()
+    return jsonify({"message": "Worker deleted successfully."}), 200
+    
 # Error handlers
 @app.errorhandler(400)
 def bad_request(error):
