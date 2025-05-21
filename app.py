@@ -1,7 +1,10 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import (
+    JWTManager, create_access_token, jwt_required,
+    get_jwt_identity, get_jwt
+)
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 
@@ -13,13 +16,12 @@ CORS(app)
 # Config
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_SECRET_KEY'] = '9f4c2bb7a89c44f3a653ed3d7c5398d7e51290d37b9c6ed354ea43a4ef3e1cfa'  # Change this to a secure key
+app.config['JWT_SECRET_KEY'] = '9f4c2bb7a89c44f3a653ed3d7c5398d7e51290d37b9c6ed354ea43a4ef3e1cfa'
 
 # Initialize extensions
 db.init_app(app)
 jwt = JWTManager(app)
 
-# Create tables
 with app.app_context():
     db.create_all()
 
@@ -69,7 +71,7 @@ def login_worker():
     data = request.get_json()
     worker = HouseWorker.query.filter_by(email=data['email']).first()
     if worker and check_password_hash(worker.password, data['password']):
-        access_token = create_access_token(identity={"role": "worker", "id": worker.id})
+        access_token = create_access_token(identity=str(worker.id), additional_claims={"role": "worker"})
         return jsonify({"token": access_token, "worker_id": worker.id}), 200
     return jsonify({"error": "Invalid credentials"}), 401
 
@@ -79,7 +81,7 @@ def login_employer():
     data = request.get_json()
     employer = Employer.query.filter_by(email=data['email']).first()
     if employer and check_password_hash(employer.password, data['password']):
-        access_token = create_access_token(identity={"role": "employer", "id": employer.id})
+        access_token = create_access_token(identity=str(employer.id), additional_claims={"role": "employer"})
         return jsonify({"token": access_token, "employer_id": employer.id}), 200
     return jsonify({"error": "Invalid credentials"}), 401
 
@@ -87,8 +89,9 @@ def login_employer():
 @app.route('/workers', methods=['GET'])
 @jwt_required()
 def get_workers():
-    user = get_jwt_identity()
-    if user['role'] != 'employer':
+    claims = get_jwt()
+    role = claims.get('role')
+    if role != 'employer':
         return jsonify({"error": "Access forbidden"}), 403
 
     workers = HouseWorker.query.all()
@@ -105,8 +108,11 @@ def get_workers():
 @app.route('/workers/<int:worker_id>', methods=['PUT'])
 @jwt_required()
 def update_worker(worker_id):
-    user = get_jwt_identity()
-    if user['role'] != 'worker' or user['id'] != worker_id:
+    claims = get_jwt()
+    role = claims.get('role')
+    user_id = int(get_jwt_identity())
+
+    if role != 'worker' or user_id != worker_id:
         return jsonify({"error": "Unauthorized"}), 403
 
     data = request.get_json()
@@ -129,8 +135,11 @@ def update_worker(worker_id):
 @app.route('/workers/<int:worker_id>', methods=['DELETE'])
 @jwt_required()
 def delete_worker(worker_id):
-    user = get_jwt_identity()
-    if user['role'] != 'worker' or user['id'] != worker_id:
+    claims = get_jwt()
+    role = claims.get('role')
+    user_id = int(get_jwt_identity())
+
+    if role != 'worker' or user_id != worker_id:
         return jsonify({"error": "Unauthorized"}), 403
 
     worker = HouseWorker.query.get(worker_id)
