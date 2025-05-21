@@ -9,13 +9,13 @@ from models import db, HouseWorker, Employer
 app = Flask(__name__)
 CORS(app)
 
-# Database configuration
+# Config
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Initialize extensions
 db.init_app(app)
 
-# Create tables
 with app.app_context():
     db.create_all()
 
@@ -90,22 +90,11 @@ def get_workers():
         "expected_salary": w.expected_salary
     } for w in workers]), 200
 
-# Update a house worker (worker only)
+# Update a house worker
 @app.route('/workers/<int:worker_id>', methods=['PUT'])
-@jwt_required()
 def update_worker(worker_id):
-    claims = get_jwt()
-    role = claims.get('role')
-    user_id = int(get_jwt_identity())
-
-    if role != 'worker' or user_id != worker_id:
-        return jsonify({"error": "Unauthorized"}), 403
-
     data = request.get_json()
     worker = HouseWorker.query.get(worker_id)
-    if not worker:
-        return jsonify({"error": "Worker not found"}), 404
-
     worker.name = data.get('name', worker.name)
     worker.email = data.get('email', worker.email)
     if 'password' in data:
@@ -117,25 +106,15 @@ def update_worker(worker_id):
     db.session.commit()
     return jsonify({"message": "Worker updated successfully."}), 200
 
-# Delete a house worker (worker only)
+# Delete a house worker
 @app.route('/workers/<int:worker_id>', methods=['DELETE'])
-@jwt_required()
 def delete_worker(worker_id):
-    claims = get_jwt()
-    role = claims.get('role')
-    user_id = int(get_jwt_identity())
-
-    if role != 'worker' or user_id != worker_id:
-        return jsonify({"error": "Unauthorized"}), 403
-
     worker = HouseWorker.query.get(worker_id)
-    if not worker:
-        return jsonify({"error": "Worker not found"}), 404
-
+    
     db.session.delete(worker)
     db.session.commit()
     return jsonify({"message": "Worker deleted successfully."}), 200
-    
+
 # Error handlers
 @app.errorhandler(400)
 def bad_request(error):
