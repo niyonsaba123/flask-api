@@ -65,6 +65,7 @@ def register_worker():
         "userType": "worker"
     }), 201
 
+
 # Register an employer
 @app.route('/register_employer', methods=['POST'])
 def register_employer():
@@ -226,6 +227,27 @@ def delete_worker(worker_id):
         "userId": str(worker_id),
         "userType": "worker"
     }), 200
+
+
+# Get a specific worker by ID
+@app.route('/worker/<id>', methods=['GET'])
+def get_worker_by_id(id):
+    worker = HouseWorker.query.get(id)
+    if not worker:
+        return jsonify({
+            "success": False,
+            "message": "Worker not found"
+        }), 404
+    
+    return jsonify({
+        "id": worker.id,
+        "name": worker.name,
+        "email": worker.email,
+        "phone": worker.phone,
+        "address": worker.address,
+        "expected_salary": worker.expected_salary
+    }), 200
+
 
 # Error handlers
 @app.errorhandler(400)
