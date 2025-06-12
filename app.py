@@ -378,13 +378,18 @@ def register_employer():
         "userType": "employer"
     }), 201
 
-# Login for house worker
+
+
 @app.route('/login_worker', methods=['POST'])
 def login_worker():
     data = request.get_json()
+    print("Login attempt for email:", data['email'])  # Add this line
+    
     worker = HouseWorker.query.filter_by(email=data['email']).first()
+    print("Worker found:", worker is not None)  # Add this line
     
     if worker and check_password_hash(worker.password, data['password']):
+        print("Password check passed")  # Add this line
         # Generate JWT token
         token = jwt.encode({
             'user_id': worker.id,
@@ -400,6 +405,7 @@ def login_worker():
             "userType": "worker"
         }), 200
     
+    print("Login failed")  # Add this line
     return jsonify({
         "success": False,
         "message": "Invalid credentials",
@@ -407,6 +413,9 @@ def login_worker():
         "token": None,
         "userType": None
     }), 401
+
+
+
 
 # Login for employer
 @app.route('/login_employer', methods=['POST'])
@@ -437,6 +446,9 @@ def login_employer():
         "token": None,
         "userType": None
     }), 401
+
+
+
 
 # Get list of all house workers
 @app.route('/workers', methods=['GET'])
