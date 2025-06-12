@@ -1105,10 +1105,11 @@ def get_employer_profile(id):
         "success": True
     }), 200
 
+
+
 @app.route('/employer/workers', methods=['GET'])
 def get_all_workers_for_employer():
-    # You can add authentication here if needed
-    workers = Worker.query.all()
+    workers = HouseWorker.query.all()
     worker_list = []
     for worker in workers:
         worker_list.append({
@@ -1118,9 +1119,11 @@ def get_all_workers_for_employer():
             "phone": worker.phone,
             "address": worker.address,
             "expected_salary": worker.expected_salary,
-            "rating": worker.rating
+            "rating": getattr(worker, 'rating', None)  # Use getattr in case some workers don't have a rating yet
         })
     return jsonify(worker_list), 200
+
+
 
 
 
