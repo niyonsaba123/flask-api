@@ -470,6 +470,7 @@ def get_workers():
     } for w in workers]), 200
 
 # Update a house worker
+
 @app.route('/workers/<int:worker_id>', methods=['PUT'])
 def update_worker(worker_id):
     data = request.get_json()
@@ -483,10 +484,12 @@ def update_worker(worker_id):
             "userType": None
         }), 404
     
-    # Only update fields that are provided in the request
-    if 'name' in data:
+    # Only update fields that are provided in the request and not empty
+    if 'name' in data and data['name']:
         worker.name = data['name']
-    if 'email' in data:
+    
+    # Don't update email if it's not provided or empty
+    if 'email' in data and data['email'] and data['email'] != str(worker_id):
         # Check if the new email is already taken by another worker
         existing_worker = HouseWorker.query.filter_by(email=data['email']).first()
         if existing_worker and existing_worker.id != worker_id:
@@ -498,13 +501,18 @@ def update_worker(worker_id):
                 "userType": None
             }), 400
         worker.email = data['email']
-    if 'password' in data:
+    
+    # Only update password if provided and not empty
+    if 'password' in data and data['password']:
         worker.password = generate_password_hash(data['password'])
-    if 'phone' in data:
+    
+    if 'phone' in data and data['phone']:
         worker.phone = data['phone']
-    if 'address' in data:
+    
+    if 'address' in data and data['address']:
         worker.address = data['address']
-    if 'expected_salary' in data:
+    
+    if 'expected_salary' in data and data['expected_salary']:
         worker.expected_salary = data['expected_salary']
 
     try:
@@ -517,6 +525,7 @@ def update_worker(worker_id):
         }), 200
     except Exception as e:
         db.session.rollback()
+        print("Error updating worker:", str(e))  # Add logging
         return jsonify({
             "success": False,
             "message": "Failed to update worker",
@@ -524,6 +533,8 @@ def update_worker(worker_id):
             "token": None,
             "userType": None
         }), 500
+
+
 
 # Delete a house worker
 @app.route('/workers/<int:worker_id>', methods=['DELETE'])
