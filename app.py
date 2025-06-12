@@ -383,29 +383,35 @@ def register_employer():
 @app.route('/login_worker', methods=['POST'])
 def login_worker():
     data = request.get_json()
-    print("Login attempt for email:", data['email'])  # Add this line
+    print("Login attempt for email:", data['email'])
     
     worker = HouseWorker.query.filter_by(email=data['email']).first()
-    print("Worker found:", worker is not None)  # Add this line
+    print("Worker found:", worker is not None)
     
-    if worker and check_password_hash(worker.password, data['password']):
-        print("Password check passed")  # Add this line
-        # Generate JWT token
-        token = jwt.encode({
-            'user_id': worker.id,
-            'user_type': 'worker',
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)
-        }, app.config['SECRET_KEY'], algorithm='HS256')
+    if worker:
+        print("Stored password hash:", worker.password)  # Add this line
+        print("Attempting to verify password")  # Add this line
+        password_check = check_password_hash(worker.password, data['password'])
+        print("Password check result:", password_check)  # Add this line
         
-        return jsonify({
-            "success": True,
-            "message": "Login successful",
-            "userId": str(worker.id),
-            "token": token,
-            "userType": "worker"
-        }), 200
+        if password_check:
+            print("Password check passed")
+            # Generate JWT token
+            token = jwt.encode({
+                'user_id': worker.id,
+                'user_type': 'worker',
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)
+            }, app.config['SECRET_KEY'], algorithm='HS256')
+            
+            return jsonify({
+                "success": True,
+                "message": "Login successful",
+                "userId": str(worker.id),
+                "token": token,
+                "userType": "worker"
+            }), 200
     
-    print("Login failed")  # Add this line
+    print("Login failed")
     return jsonify({
         "success": False,
         "message": "Invalid credentials",
