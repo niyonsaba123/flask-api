@@ -1100,7 +1100,7 @@ def get_employer_profile(id):
             "id": employer.id,
             "name": employer.name,
             "email": employer.email,
-            "phone": employer.phone
+            # "phone": employer.phone
         },
         "success": True
     }), 200
