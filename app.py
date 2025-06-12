@@ -1086,6 +1086,44 @@ def register_employer():
         "userType": "employer"
     }), 201
 
+
+@app.route('/employer/profile/<int:id>', methods=['GET'])
+def get_employer_profile(id):
+    employer = Employer.query.get(id)
+    if not employer:
+        return jsonify({
+            "message": "Employer not found",
+            "success": False
+        }), 404
+    return jsonify({
+        "employer": {
+            "id": employer.id,
+            "name": employer.name,
+            "email": employer.email,
+            "phone": employer.phone
+        },
+        "success": True
+    }), 200
+
+@app.route('/employer/workers', methods=['GET'])
+def get_all_workers_for_employer():
+    # You can add authentication here if needed
+    workers = Worker.query.all()
+    worker_list = []
+    for worker in workers:
+        worker_list.append({
+            "id": worker.id,
+            "name": worker.name,
+            "email": worker.email,
+            "phone": worker.phone,
+            "address": worker.address,
+            "expected_salary": worker.expected_salary,
+            "rating": worker.rating
+        })
+    return jsonify(worker_list), 200
+
+
+
 @app.route('/login_worker', methods=['POST'])
 def login_worker():
     data = request.get_json()
