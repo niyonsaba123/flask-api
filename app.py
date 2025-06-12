@@ -1124,6 +1124,21 @@ def get_all_workers_for_employer():
     return jsonify(worker_list), 200
 
 
+@app.route('/hire_worker/<int:worker_id>', methods=['POST'])
+def hire_worker(worker_id):
+    data = request.get_json()
+    employer_email = data.get('employer_email')
+    worker = HouseWorker.query.get(worker_id)
+    if not worker:
+        return jsonify({"success": False, "message": "Worker not found"}), 404
+    if worker.status == "hired":
+        return jsonify({"success": False, "message": "Worker already hired"}), 400
+    worker.status = "hired"
+    worker.boss = employer_email
+    db.session.commit()
+    return jsonify({"success": True, "message": "Worker hired successfully"}), 200
+
+
 
 
 
