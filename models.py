@@ -13,6 +13,7 @@ class HouseWorker(db.Model):
     phone = db.Column(db.String(20))
     address = db.Column(db.String(200))
     expected_salary = db.Column(db.String(50))
+    rating = db.Column(db.Float)
 
     def set_password(self, password):
         self.password = generate_password_hash(password)
