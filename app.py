@@ -1350,6 +1350,53 @@ def delete_worker(worker_id):
         "token": None
     }), 200
 
+
+@app.route('/employer/profile/<int:id>', methods=['PUT', 'POST'])
+def update_employer_profile(id):
+    employer = Employer.query.get(id)
+    if not employer:
+        return jsonify({
+            "success": False,
+            "message": "Employer not found"
+        }), 404
+
+    data = request.get_json()
+    # Update fields if present in the request
+    if 'name' in data and data['name']:
+        employer.name = data['name']
+    if 'email' in data and data['email']:
+        # Optional: check for duplicate email
+        existing = Employer.query.filter_by(email=data['email']).first()
+        if existing and existing.id != id:
+            return jsonify({
+                "success": False,
+                "message": "Email already registered by another employer"
+            }), 400
+        employer.email = data['email']
+    if 'address' in data and data['address']:
+        employer.address = data['address']
+    # Add more fields as needed (e.g., phone) if your Employer model supports them
+
+    try:
+        db.session.commit()
+        return jsonify({
+            "success": True,
+            "message": "Employer updated successfully",
+            "employer": {
+                "id": employer.id,
+                "name": employer.name,
+                "email": employer.email,
+                "address": employer.address
+            }
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "success": False,
+            "message": "Failed to update employer"
+        }), 500
+
+
 @app.errorhandler(400)
 def bad_request(error):
     return jsonify({
