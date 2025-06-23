@@ -1397,6 +1397,32 @@ def update_employer_profile(id):
         }), 500
 
 
+@app.route('/employer/profile/<int:id>', methods=['DELETE'])
+def delete_employer_profile(id):
+    employer = Employer.query.get(id)
+    if not employer:
+        return jsonify({
+            "success": False,
+            "message": "Employer not found"
+        }), 404
+
+    try:
+        db.session.delete(employer)
+        db.session.commit()
+        return jsonify({
+            "success": True,
+            "message": "Employer deleted successfully"
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "success": False,
+            "message": "Failed to delete employer"
+        }), 500
+
+
+
+
 @app.errorhandler(400)
 def bad_request(error):
     return jsonify({
