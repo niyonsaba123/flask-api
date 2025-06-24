@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
 
 db = SQLAlchemy()
 
@@ -37,3 +38,18 @@ class Employer(db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password, password)
+
+
+
+class JobOffer(db.Model):
+    __tablename__ = 'job_offers'
+    id = db.Column(db.Integer, primary_key=True)
+    employer_id = db.Column(db.Integer, db.ForeignKey('employers.id'), nullable=False)
+    worker_id = db.Column(db.Integer, db.ForeignKey('house_workers.id'), nullable=False)
+    status = db.Column(db.String(20), default='pending', nullable=False)
+    rating = db.Column(db.Integer)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    employer = db.relationship('Employer', backref='job_offers')
+    worker = db.relationship('HouseWorker', backref='job_offers')
