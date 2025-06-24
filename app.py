@@ -1494,14 +1494,15 @@ def leave_job(worker_id):
 
 
 
+
 @app.route('/employer/available_workers', methods=['GET'])
-@token_required
+@token_required(['employer'])
 def available_workers_flat():
     workers = HouseWorker.query.filter_by(status='available').all()
     return jsonify([w.to_dict() for w in workers]), 200
 
 @app.route('/employer/hired_workers', methods=['GET'])
-@token_required
+@token_required(['employer'])
 def hired_workers_flat():
     # Get employer id from token
     token = None
@@ -1522,17 +1523,21 @@ def hired_workers_flat():
     workers = HouseWorker.query.filter_by(boss=employer_id, status='hired').all()
     return jsonify([w.to_dict() for w in workers]), 200
 
-@app.route('/employer/available_workers', methods=['GET'])
-@token_required(['employer'])
-def available_workers_flat():
-
-@app.route('/employer/hired_workers', methods=['GET'])
-@token_required(['employer'])
-def hired_workers_flat():
-
 @app.route('/workers', methods=['GET'])
 @token_required(['worker'])
 def get_workers():
+    workers = HouseWorker.query.all()
+    return jsonify([{
+        "id": w.id,
+        "name": w.name,
+        "email": w.email,
+        "phone": w.phone,
+        "address": w.address,
+        "expected_salary": w.expected_salary,
+        "status": w.status,
+        "boss": w.boss,
+        "userType": "worker"
+    } for w in workers]), 200
 
 
 
