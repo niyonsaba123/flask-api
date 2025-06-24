@@ -966,47 +966,49 @@ def generate_sha256_hash(password):
 def verify_sha256_hash(stored_hash, password):
     return stored_hash == sha256(password.encode()).hexdigest()
 
+
 # Token verification decorator
-def token_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = None
-        auth_header = request.headers.get('Authorization')
-        
-        if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
-        
-        if not token:
-            return jsonify({
-                "success": False,
-                "message": "Token is missing",
-                "userId": None,
-                "token": None,
-                "userType": None
-            }), 401
-        
-        try:
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-            current_user = data['user_type']
-            if current_user != 'worker':
+def token_required(allowed_types=None):
+    if allowed_types is None:
+        allowed_types = ['worker', 'employer']
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            token = None
+            auth_header = request.headers.get('Authorization')
+            if auth_header and auth_header.startswith('Bearer '):
+                token = auth_header.split(' ')[1]
+            if not token:
                 return jsonify({
                     "success": False,
-                    "message": "Invalid user type",
+                    "message": "Token is missing",
                     "userId": None,
                     "token": None,
                     "userType": None
                 }), 401
-        except:
-            return jsonify({
-                "success": False,
-                "message": "Token is invalid",
-                "userId": None,
-                "token": None,
-                "userType": None
-            }), 401
-            
-        return f(*args, **kwargs)
-    return decorated
+            try:
+                data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+                current_user_type = data['user_type']
+                if current_user_type not in allowed_types:
+                    return jsonify({
+                        "success": False,
+                        "message": "Invalid user type",
+                        "userId": None,
+                        "token": None,
+                        "userType": None
+                    }), 401
+            except Exception as e:
+                return jsonify({
+                    "success": False,
+                    "message": "Token is invalid",
+                    "userId": None,
+                    "token": None,
+                    "userType": None
+                }), 401
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
+
 
 @app.route('/')
 def index():
