@@ -1226,21 +1226,21 @@ def login_employer():
 #     } for w in workers]), 200
 
 
-@app.route('/workers', methods=['GET'])
-@token_required
-def get_workers():
-    workers = HouseWorker.query.all()
-    return jsonify([{
-        "id": w.id,
-        "name": w.name,
-        "email": w.email,
-        "phone": w.phone,
-        "address": w.address,
-        "expected_salary": w.expected_salary,
-        "status": w.status,
-        "boss": w.boss,
-        "userType": "worker"
-    } for w in workers]), 200
+# @app.route('/workers', methods=['GET'])
+# @token_required
+# def get_workers():
+#     workers = HouseWorker.query.all()
+#     return jsonify([{
+#         "id": w.id,
+#         "name": w.name,
+#         "email": w.email,
+#         "phone": w.phone,
+#         "address": w.address,
+#         "expected_salary": w.expected_salary,
+#         "status": w.status,
+#         "boss": w.boss,
+#         "userType": "worker"
+#     } for w in workers]), 200
 
 
 
