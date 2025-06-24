@@ -331,8 +331,8 @@ def update_worker(worker_id):
     if 'password' in data and data['password']:
         worker.password = generate_sha256_hash(data['password'])
     
-    if 'phone' in data and data['phone']:
-        worker.phone = data['phone']
+    # if 'phone' in data and data['phone']:
+    #     worker.phone = data['phone']
     
     if 'address' in data and data['address']:
         worker.address = data['address']
