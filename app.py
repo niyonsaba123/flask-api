@@ -1423,6 +1423,77 @@ def delete_employer_profile(id):
 
 
 
+@app.route('/api/employers/<int:employer_id>/available_workers', methods=['GET'])
+def get_available_workers(employer_id):
+    workers = HouseWorker.query.filter_by(status='available').all()
+    return jsonify([w.to_dict() for w in workers])
+
+
+@app.route('/api/employers/<int:employer_id>/hired_workers', methods=['GET'])
+def get_hired_workers(employer_id):
+    offers = JobOffer.query.filter_by(employer_id=employer_id, status='accepted').all()
+    workers = [offer.worker.to_dict() for offer in offers]
+    return jsonify(workers)
+
+
+@app.route('/api/employers/<int:employer_id>/offer', methods=['POST'])
+def create_job_offer(employer_id):
+    data = request.json
+    worker_id = data.get('worker_id')
+    offer = JobOffer(employer_id=employer_id, worker_id=worker_id)
+    db.session.add(offer)
+    db.session.commit()
+    return jsonify({'success': True, 'offer_id': offer.id})
+
+
+@app.route('/api/workers/<int:worker_id>/offers', methods=['GET'])
+def get_worker_offers(worker_id):
+    offers = JobOffer.query.filter_by(worker_id=worker_id).all()
+    return jsonify([o.to_dict() for o in offers])
+
+
+@app.route('/api/workers/<int:worker_id>/accept_offer', methods=['POST'])
+def accept_offer(worker_id):
+    data = request.json
+    offer_id = data.get('offer_id')
+    offer = JobOffer.query.get(offer_id)
+    if offer and offer.worker_id == worker_id:
+        offer.status = 'accepted'
+        offer.updated_at = datetime.utcnow()
+        # Optionally update worker status
+        worker = HouseWorker.query.get(worker_id)
+        worker.status = 'hired'
+        worker.boss = offer.employer_id
+        db.session.commit()
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Offer not found or unauthorized'}), 404
+
+
+@app.route('/api/workers/<int:worker_id>/leave_job', methods=['POST'])
+def leave_job(worker_id):
+    data = request.json
+    offer_id = data.get('offer_id')
+    rating = data.get('rating')
+    offer = JobOffer.query.get(offer_id)
+    if offer and offer.worker_id == worker_id and offer.status == 'accepted':
+        offer.status = 'completed'
+        offer.rating = rating
+        offer.updated_at = datetime.utcnow()
+        # Update worker status and rating
+        worker = HouseWorker.query.get(worker_id)
+        worker.status = 'available'
+        # Optionally, update worker's average rating
+        ratings = [o.rating for o in worker.job_offers if o.rating is not None]
+        if ratings:
+            worker.rating = sum(ratings) / len(ratings)
+        db.session.commit()
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Offer not found or unauthorized'}), 404
+
+
+
+
+
 @app.errorhandler(400)
 def bad_request(error):
     return jsonify({
