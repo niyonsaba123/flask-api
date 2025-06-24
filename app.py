@@ -1492,6 +1492,36 @@ def leave_job(worker_id):
 
 
 
+@app.route('/employer/available_workers', methods=['GET'])
+@token_required
+def available_workers_flat():
+    workers = HouseWorker.query.filter_by(status='available').all()
+    return jsonify([w.to_dict() for w in workers]), 200
+
+@app.route('/employer/hired_workers', methods=['GET'])
+@token_required
+def hired_workers_flat():
+    # Get employer id from token
+    token = None
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ')[1]
+    employer_id = None
+    if token:
+        try:
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            if data['user_type'] == 'employer':
+                employer_id = data['user_id']
+        except Exception as e:
+            return jsonify({"success": False, "message": "Invalid token"}), 401
+    if not employer_id:
+        return jsonify({"success": False, "message": "No employer id"}), 401
+
+    workers = HouseWorker.query.filter_by(boss=employer_id, status='hired').all()
+    return jsonify([w.to_dict() for w in workers]), 200
+
+
+
 
 
 @app.errorhandler(400)
