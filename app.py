@@ -171,21 +171,21 @@ def get_employer_profile(id):
 
 
 
-@app.route('/employer/workers', methods=['GET'])
-def get_all_workers_for_employer():
-    workers = HouseWorker.query.all()
-    worker_list = []
-    for worker in workers:
-        worker_list.append({
-            "id": worker.id,
-            "name": worker.name,
-            "email": worker.email,
-            "phone": worker.phone,
-            "address": worker.address,
-            "expected_salary": worker.expected_salary,
-            "rating": getattr(worker, 'rating', None)  # Use getattr in case some workers don't have a rating yet
-        })
-    return jsonify(worker_list), 200
+# @app.route('/employer/workers', methods=['GET'])
+# def get_all_workers_for_employer():
+#     workers = HouseWorker.query.all()
+#     worker_list = []
+#     for worker in workers:
+#         worker_list.append({
+#             "id": worker.id,
+#             "name": worker.name,
+#             "email": worker.email,
+#             "phone": worker.phone,
+#             "address": worker.address,
+#             "expected_salary": worker.expected_salary,
+#             "rating": getattr(worker, 'rating', None)  # Use getattr in case some workers don't have a rating yet
+#         })
+#     return jsonify(worker_list), 200
 
 
 @app.route('/hire_worker/<int:worker_id>', methods=['POST'])
