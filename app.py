@@ -17,7 +17,7 @@ app.config['SECRET_KEY'] = '17lIah6CSZu32PrMAnfxOdNFBLpDnxV4'
 
 db = SQLAlchemy(app)
 
-# Models
+# Models matching your database tables exactly
 class Employer(db.Model):
     __tablename__ = 'employers'
     
@@ -26,14 +26,6 @@ class Employer(db.Model):
     email = db.Column(db.String(120), unique=True)
     password = db.Column(db.String(255))
     address = db.Column(db.String(200))
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "email": self.email,
-            "address": self.address
-        }
 
 class HouseWorker(db.Model):
     __tablename__ = 'house_workers'
@@ -49,33 +41,6 @@ class HouseWorker(db.Model):
     status = db.Column(db.String(32), default='available')
     boss = db.Column(db.String(128))
 
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "email": self.email,
-            "phone": self.phone,
-            "address": self.address,
-            "expected_salary": self.expected_salary,
-            "rating": self.rating,
-            "status": self.status,
-            "boss": self.boss
-        }
-
-class JobOffer(db.Model):
-    __tablename__ = 'job_offers'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    employer_id = db.Column(db.Integer, db.ForeignKey('employers.id'))
-    worker_id = db.Column(db.Integer, db.ForeignKey('house_workers.id'))
-    status = db.Column(db.String(20), default='pending')
-    rating = db.Column(db.Integer)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.datetime.utcnow)
-
-    employer = db.relationship('Employer', backref='offers')
-    worker = db.relationship('HouseWorker', backref='offers')
-
 # Helper Functions
 def generate_sha256_hash(password):
     return sha256(password.encode()).hexdigest()
@@ -90,251 +55,340 @@ def generate_token(user_id, user_type):
         'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)
     }, app.config['SECRET_KEY'], algorithm='HS256')
 
-def make_response(success=True, message="", data=None, status_code=200, token=None, user_type=None):
-    response = {
-        "success": success,
-        "message": message,
-        "userType": user_type,
-        "token": token
-    }
-    if data:
-        response.update(data)
-    return jsonify(response), status_code
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+        
+        if not token:
+            return jsonify({
+                "success": False,
+                "message": "Token is missing",
+                "userId": None,
+                "token": None,
+                "userType": None
+            }), 401
+        
+        try:
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            current_user = data['user_type']
+            if current_user not in ['worker', 'employer']:
+                return jsonify({
+                    "success": False,
+                    "message": "Invalid user type",
+                    "userId": None,
+                    "token": None,
+                    "userType": None
+                }), 401
+            kwargs['user_id'] = data['user_id']
+            kwargs['user_type'] = data['user_type']
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "message": "Token is invalid",
+                "userId": None,
+                "token": None,
+                "userType": None
+            }), 401
+            
+        return f(*args, **kwargs)
+    return decorated
 
-def make_error_response(message="", status_code=400):
-    return make_response(False, message, None, status_code)
-
-def get_user_from_token():
-    token = None
-    auth_header = request.headers.get('Authorization')
-    if auth_header and auth_header.startswith('Bearer '):
-        token = auth_header.split(' ')[1]
-    if not token:
-        return None
-    try:
-        data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-        if data['user_type'] == 'worker':
-            return HouseWorker.query.get(data['user_id'])
-        else:
-            return Employer.query.get(data['user_id'])
-    except:
-        return None
+@app.route('/')
+def index():
+    return jsonify({"message": "Flask API with Postgres is running!"})
 
 # Auth Routes
-@app.route('/register/<user_type>', methods=['POST'])
-def register(user_type):
+@app.route('/register_worker', methods=['POST'])
+def register_worker():
     data = request.get_json()
+    if HouseWorker.query.filter_by(email=data['email']).first():
+        return jsonify({
+            "success": False,
+            "message": "Email already registered",
+            "userId": None,
+            "token": None,
+            "userType": None
+        }), 400
+
+    new_worker = HouseWorker(
+        name=data['name'],
+        email=data['email'],
+        password=generate_sha256_hash(data['password']),
+        phone=data.get('phone', ''),
+        address=data.get('address', ''),
+        expected_salary=data.get('expected_salary', '')
+    )
+    db.session.add(new_worker)
+    db.session.commit()
     
-    if user_type == 'worker':
-        model = HouseWorker
-    elif user_type == 'employer':
-        model = Employer
-    else:
-        return make_error_response("Invalid user type", 400)
+    token = generate_token(new_worker.id, 'worker')
+    return jsonify({
+        "success": True,
+        "message": "House worker registered successfully",
+        "userId": str(new_worker.id),
+        "token": token,
+        "userType": "worker"
+    }), 201
 
-    if model.query.filter_by(email=data['email']).first():
-        return make_error_response("Email already registered", 400)
+@app.route('/register_employer', methods=['POST'])
+def register_employer():
+    data = request.get_json()
+    if Employer.query.filter_by(email=data['email']).first():
+        return jsonify({
+            "success": False,
+            "message": "Email already registered",
+            "userId": None,
+            "token": None,
+            "userType": None
+        }), 400
 
-    new_user = model(
+    new_employer = Employer(
         name=data['name'],
         email=data['email'],
         password=generate_sha256_hash(data['password']),
         address=data.get('address', '')
     )
-    
-    if user_type == 'worker':
-        new_user.phone = data.get('phone', '')
-        new_user.expected_salary = data.get('expected_salary', '')
-
-    db.session.add(new_user)
+    db.session.add(new_employer)
     db.session.commit()
     
-    token = generate_token(new_user.id, user_type)
-    return make_response(
-        message=f"{user_type.capitalize()} registered successfully",
-        data={"userId": new_user.id},
-        token=token,
-        user_type=user_type,
-        status_code=201
-    )
+    token = generate_token(new_employer.id, 'employer')
+    return jsonify({
+        "success": True,
+        "message": "Employer registered successfully",
+        "userId": str(new_employer.id),
+        "token": token,
+        "userType": "employer"
+    }), 201
 
-@app.route('/login/<user_type>', methods=['POST'])
-def login(user_type):
+@app.route('/login_worker', methods=['POST'])
+def login_worker():
     data = request.get_json()
+    worker = HouseWorker.query.filter_by(email=data['email']).first()
     
-    if user_type == 'worker':
-        user = HouseWorker.query.filter_by(email=data['email']).first()
-    elif user_type == 'employer':
-        user = Employer.query.filter_by(email=data['email']).first()
-    else:
-        return make_error_response("Invalid user type", 400)
+    if worker and verify_sha256_hash(worker.password, data['password']):
+        token = generate_token(worker.id, 'worker')
+        return jsonify({
+            "success": True,
+            "message": "Login successful",
+            "userId": str(worker.id),
+            "token": token,
+            "userType": "worker"
+        }), 200
     
-    if user and verify_sha256_hash(user.password, data['password']):
-        token = generate_token(user.id, user_type)
-        return make_response(
-            message="Login successful",
-            data={"userId": user.id},
-            token=token,
-            user_type=user_type
-        )
+    return jsonify({
+        "success": False,
+        "message": "Invalid credentials",
+        "userId": None,
+        "token": None,
+        "userType": None
+    }), 401
+
+@app.route('/login_employer', methods=['POST'])
+def login_employer():
+    data = request.get_json()
+    employer = Employer.query.filter_by(email=data['email']).first()
     
-    return make_error_response("Invalid credentials", 401)
+    if employer and verify_sha256_hash(employer.password, data['password']):
+        token = generate_token(employer.id, 'employer')
+        return jsonify({
+            "success": True,
+            "message": "Login successful",
+            "userId": str(employer.id),
+            "token": token,
+            "userType": "employer"
+        }), 200
+    
+    return jsonify({
+        "success": False,
+        "message": "Invalid credentials",
+        "userId": None,
+        "token": None,
+        "userType": None
+    }), 401
 
 # Profile Routes
-@app.route('/<user_type>/profile', methods=['GET', 'PUT', 'DELETE'])
-def profile_operations(user_type):
-    user = get_user_from_token()
-    if not user:
-        return make_error_response("Unauthorized", 401)
+@app.route('/employer/profile/<int:id>', methods=['GET'])
+@token_required
+def get_employer_profile(id, user_id, user_type):
+    if user_type != 'employer' or str(id) != str(user_id):
+        return jsonify({
+            "success": False,
+            "message": "Unauthorized",
+            "userId": None,
+            "token": None,
+            "userType": None
+        }), 401
     
-    if request.method == 'GET':
-        return make_response(data={"profile": user.to_dict()})
+    employer = Employer.query.get(id)
+    if not employer:
+        return jsonify({
+            "success": False,
+            "message": "Employer not found",
+            "userId": None,
+            "token": None,
+            "userType": None
+        }), 404
     
-    elif request.method == 'PUT':
-        data = request.get_json()
-        
-        if 'name' in data:
-            user.name = data['name']
-        if 'email' in data:
-            if user_type == 'worker' and HouseWorker.query.filter_by(email=data['email']).first():
-                return make_error_response("Email already in use", 400)
-            elif user_type == 'employer' and Employer.query.filter_by(email=data['email']).first():
-                return make_error_response("Email already in use", 400)
-            user.email = data['email']
-        if 'password' in data:
-            user.password = generate_sha256_hash(data['password'])
-        if 'address' in data:
-            user.address = data['address']
-        if user_type == 'worker':
-            if 'phone' in data:
-                user.phone = data['phone']
-            if 'expected_salary' in data:
-                user.expected_salary = data['expected_salary']
-        
-        db.session.commit()
-        return make_response(message="Profile updated successfully")
+    return jsonify({
+        "success": True,
+        "employer": {
+            "id": employer.id,
+            "name": employer.name,
+            "email": employer.email,
+            "address": employer.address
+        }
+    }), 200
+
+@app.route('/worker/profile/<int:id>', methods=['GET'])
+@token_required
+def get_worker_profile(id, user_id, user_type):
+    if user_type != 'worker' or str(id) != str(user_id):
+        return jsonify({
+            "success": False,
+            "message": "Unauthorized",
+            "userId": None,
+            "token": None,
+            "userType": None
+        }), 401
     
-    elif request.method == 'DELETE':
-        db.session.delete(user)
-        db.session.commit()
-        return make_response(message="Account deleted successfully")
+    worker = HouseWorker.query.get(id)
+    if not worker:
+        return jsonify({
+            "success": False,
+            "message": "Worker not found",
+            "userId": None,
+            "token": None,
+            "userType": None
+        }), 404
+    
+    return jsonify({
+        "success": True,
+        "worker": {
+            "id": worker.id,
+            "name": worker.name,
+            "email": worker.email,
+            "phone": worker.phone,
+            "address": worker.address,
+            "expected_salary": worker.expected_salary,
+            "status": worker.status,
+            "boss": worker.boss,
+            "rating": worker.rating
+        }
+    }), 200
 
 # Worker Management Routes
+@app.route('/workers', methods=['GET'])
+@token_required
+def get_all_workers(user_id, user_type):
+    workers = HouseWorker.query.all()
+    worker_list = []
+    for worker in workers:
+        worker_list.append({
+            "id": worker.id,
+            "name": worker.name,
+            "email": worker.email,
+            "phone": worker.phone,
+            "address": worker.address,
+            "expected_salary": worker.expected_salary,
+            "status": worker.status,
+            "boss": worker.boss,
+            "rating": worker.rating
+        })
+    return jsonify(worker_list), 200
+
 @app.route('/workers/available', methods=['GET'])
-def available_workers():
-    user = get_user_from_token()
-    if not user or not isinstance(user, Employer):
-        return make_error_response("Unauthorized", 401)
+@token_required
+def get_available_workers(user_id, user_type):
+    if user_type != 'employer':
+        return jsonify({
+            "success": False,
+            "message": "Unauthorized",
+            "userId": None,
+            "token": None,
+            "userType": None
+        }), 401
     
     workers = HouseWorker.query.filter_by(status='available').all()
-    return make_response(data={"workers": [w.to_dict() for w in workers]})
+    return jsonify([w.to_dict() for w in workers]), 200
 
 @app.route('/workers/hired', methods=['GET'])
-def hired_workers():
-    user = get_user_from_token()
-    if not user or not isinstance(user, Employer):
-        return make_error_response("Unauthorized", 401)
+@token_required
+def get_hired_workers(user_id, user_type):
+    if user_type != 'employer':
+        return jsonify({
+            "success": False,
+            "message": "Unauthorized",
+            "userId": None,
+            "token": None,
+            "userType": None
+        }), 401
     
-    workers = HouseWorker.query.filter_by(boss=user.email, status='hired').all()
-    return make_response(data={"workers": [w.to_dict() for w in workers]})
+    employer = Employer.query.get(user_id)
+    if not employer:
+        return jsonify({
+            "success": False,
+            "message": "Employer not found",
+            "userId": None,
+            "token": None,
+            "userType": None
+        }), 404
+    
+    workers = HouseWorker.query.filter_by(boss=employer.email, status='hired').all()
+    return jsonify([w.to_dict() for w in workers]), 200
 
-@app.route('/workers/hire/<int:worker_id>', methods=['POST'])
-def hire_worker(worker_id):
-    employer = get_user_from_token()
-    if not employer or not isinstance(employer, Employer):
-        return make_error_response("Unauthorized", 401)
+@app.route('/hire_worker/<int:worker_id>', methods=['POST'])
+@token_required
+def hire_worker(worker_id, user_id, user_type):
+    if user_type != 'employer':
+        return jsonify({
+            "success": False,
+            "message": "Unauthorized",
+            "userId": None,
+            "token": None,
+            "userType": None
+        }), 401
+    
+    employer = Employer.query.get(user_id)
+    if not employer:
+        return jsonify({
+            "success": False,
+            "message": "Employer not found",
+            "userId": None,
+            "token": None,
+            "userType": None
+        }), 404
     
     worker = HouseWorker.query.get(worker_id)
     if not worker:
-        return make_error_response("Worker not found", 404)
+        return jsonify({
+            "success": False,
+            "message": "Worker not found",
+            "userId": None,
+            "token": None,
+            "userType": None
+        }), 404
+    
     if worker.status == "hired":
-        return make_error_response("Worker already hired", 400)
+        return jsonify({
+            "success": False,
+            "message": "Worker already hired",
+            "userId": None,
+            "token": None,
+            "userType": None
+        }), 400
     
-    # Create job offer
-    offer = JobOffer(
-        employer_id=employer.id,
-        worker_id=worker.id,
-        status='accepted'
-    )
-    
-    # Update worker status
     worker.status = "hired"
     worker.boss = employer.email
-    
-    db.session.add(offer)
     db.session.commit()
     
-    return make_response(message="Worker hired successfully")
-
-@app.route('/workers/offers', methods=['GET'])
-def get_worker_offers():
-    worker = get_user_from_token()
-    if not worker or not isinstance(worker, HouseWorker):
-        return make_error_response("Unauthorized", 401)
-    
-    offers = JobOffer.query.filter_by(worker_id=worker.id).all()
-    return make_response(data={"offers": [{
-        "id": o.id,
-        "employer": o.employer.to_dict(),
-        "status": o.status,
-        "created_at": o.created_at.isoformat() if o.created_at else None
-    } for o in offers]})
-
-@app.route('/workers/accept_offer/<int:offer_id>', methods=['POST'])
-def accept_offer(offer_id):
-    worker = get_user_from_token()
-    if not worker or not isinstance(worker, HouseWorker):
-        return make_error_response("Unauthorized", 401)
-    
-    offer = JobOffer.query.get(offer_id)
-    if not offer or offer.worker_id != worker.id:
-        return make_error_response("Offer not found", 404)
-    
-    offer.status = 'accepted'
-    worker.status = 'hired'
-    worker.boss = offer.employer.email
-    db.session.commit()
-    
-    return make_response(message="Offer accepted successfully")
-
-@app.route('/workers/complete_job', methods=['POST'])
-def complete_job():
-    worker = get_user_from_token()
-    if not worker or not isinstance(worker, HouseWorker) or worker.status != 'hired':
-        return make_error_response("Unauthorized", 401)
-    
-    data = request.get_json()
-    rating = data.get('rating')
-    
-    # Find the active job offer
-    offer = JobOffer.query.filter_by(
-        worker_id=worker.id,
-        status='accepted'
-    ).first()
-    
-    if not offer:
-        return make_error_response("No active job found", 400)
-    
-    # Update offer and worker status
-    offer.status = 'completed'
-    offer.rating = rating
-    offer.updated_at = datetime.datetime.utcnow()
-    
-    worker.status = 'available'
-    worker.boss = None
-    
-    # Update worker rating
-    if rating:
-        completed_offers = JobOffer.query.filter_by(
-            worker_id=worker.id,
-            status='completed'
-        ).all()
-        ratings = [o.rating for o in completed_offers if o.rating]
-        if ratings:
-            worker.rating = sum(ratings) / len(ratings)
-    
-    db.session.commit()
-    return make_response(message="Job completed successfully")
+    return jsonify({
+        "success": True,
+        "message": "Worker hired successfully"
+    }), 200
 
 # Initialize database
 with app.app_context():
